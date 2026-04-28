@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # Database: PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: leetcode-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: myleetcode
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Message Broker: RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: leetcode-queue
+    ports:
+      - "5672:5672" # AMQP protocol
+      - "15672:15672" # Management UI (Admin)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+volumes:
+  pgdata:
