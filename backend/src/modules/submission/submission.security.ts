@@ -1,4 +1,9 @@
 import type { NextFunction, Request, Response } from 'express'
+import {
+    InMemorySubmissionRateLimitStore,
+    RedisSubmissionRateLimitStore,
+    type SubmissionRateLimitStore,
+} from './submission.rate-limit.js'
 
 export const SUPPORTED_LANGUAGES = ['javascript', 'python', 'cpp'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
@@ -19,20 +24,18 @@ interface ThreatSignature {
     pattern: RegExp
 }
 
-interface SubmissionPayloadShape {
-    userId: string
+export interface SubmissionRequestBodyShape {
     problemId: string
     language: SupportedLanguage
     code: string
 }
 
-interface RateWindow {
-    hits: number[]
+export interface SubmissionPayloadShape extends SubmissionRequestBodyShape {
+    userId: string
 }
 
-const submissionRateWindows = new Map<string, RateWindow>()
-
 const GENERIC_DANGEROUS_PATH_PATTERN = /(?:\/proc\/|\/sys\/|\/dev\/|\/etc\/|\/var\/run\/docker\.sock|\\windows\\system32\\|[a-z]:\\)/i
+let submissionRateLimitStore: SubmissionRateLimitStore = createSubmissionRateLimitStore()
 
 const THREAT_SIGNATURES: Record<SupportedLanguage, ThreatSignature[]> = {
     javascript: [
@@ -115,15 +118,42 @@ export class SubmissionSecurityError extends Error {
     }
 }
 
+export class SubmissionProcessingError extends Error {
+    readonly statusCode: number
+    readonly code: string
+
+    constructor(message: string, statusCode = 500, code = 'SUBMISSION_PROCESSING_ERROR') {
+        super(message)
+        this.name = 'SubmissionProcessingError'
+        this.statusCode = statusCode
+        this.code = code
+    }
+}
+
 export function isSubmissionSecurityError(error: unknown): error is SubmissionSecurityError {
     return error instanceof SubmissionSecurityError
 }
 
-export function submissionSecurityMiddleware(req: Request, res: Response, next: NextFunction): void {
+export function isSubmissionProcessingError(error: unknown): error is SubmissionProcessingError {
+    return error instanceof SubmissionProcessingError
+}
+
+export async function submissionSecurityMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         ensureJsonRequest(req)
 
-        const decision = consumeSubmissionRateLimitToken(buildSubmissionRateLimitKey(req))
+        let decision: { allowed: boolean, retryAfterSeconds: number }
+        try {
+            decision = await consumeSubmissionRateLimitToken(buildSubmissionRateLimitKey(req))
+        } catch (error) {
+            console.error('[SubmissionSecurity] Rate limiter unavailable:', error)
+            throw new SubmissionProcessingError(
+                'Submission rate limiter is temporarily unavailable. Please retry.',
+                503,
+                'SUBMISSION_RATE_LIMITER_UNAVAILABLE',
+            )
+        }
+
         if (!decision.allowed) {
             res.setHeader('Retry-After', String(decision.retryAfterSeconds))
             throw new SubmissionSecurityError(
@@ -133,7 +163,7 @@ export function submissionSecurityMiddleware(req: Request, res: Response, next: 
             )
         }
 
-        req.body = validateSubmissionPayload(req.body)
+        req.body = validateSubmissionRequestBody(req.body)
         next()
     } catch (error) {
         next(error)
@@ -156,10 +186,23 @@ export function validateSubmissionPayload(raw: unknown): SubmissionPayloadShape 
 
     const payload = raw as Record<string, unknown>
     const userId = readRequiredString(payload.userId, 'userId')
+    const requestBody = validateSubmissionRequestBody(payload)
+
+    return {
+        userId,
+        ...requestBody,
+    }
+}
+
+export function validateSubmissionRequestBody(raw: unknown): SubmissionRequestBodyShape {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        throw new SubmissionSecurityError('Submission payload must be a JSON object', 400, 'INVALID_SUBMISSION_PAYLOAD')
+    }
+
+    const payload = raw as Record<string, unknown>
     const problemId = readRequiredString(payload.problemId, 'problemId')
     const language = readRequiredLanguage(payload.language)
     const code = readRequiredCode(payload.code)
-
     const codeLines = code.split(/\r\n|\r|\n/).length
     if (codeLines > SUBMISSION_SECURITY_POLICY.maxCodeLines) {
         throw new SubmissionSecurityError(
@@ -179,7 +222,6 @@ export function validateSubmissionPayload(raw: unknown): SubmissionPayloadShape 
     }
 
     return {
-        userId,
         problemId,
         language,
         code,
@@ -189,12 +231,12 @@ export function validateSubmissionPayload(raw: unknown): SubmissionPayloadShape 
 export function detectSubmissionThreat(language: SupportedLanguage, code: string): ThreatSignature | null {
     const signatures = THREAT_SIGNATURES[language]
     for (const signature of signatures) {
-        if (signature.pattern.test(code)) {
+        if (matchesThreatPattern(signature.pattern, code)) {
             return signature
         }
     }
 
-    if (GENERIC_DANGEROUS_PATH_PATTERN.test(code)) {
+    if (matchesThreatPattern(GENERIC_DANGEROUS_PATH_PATTERN, code)) {
         return {
             category: 'SANDBOX_ESCAPE',
             reason: 'host-level paths are not allowed in submissions',
@@ -205,32 +247,19 @@ export function detectSubmissionThreat(language: SupportedLanguage, code: string
     return null
 }
 
-export function consumeSubmissionRateLimitToken(key: string, now = Date.now()): { allowed: boolean, retryAfterSeconds: number } {
-    const windowStart = now - SUBMISSION_SECURITY_POLICY.rateLimitWindowMs
-    const state = submissionRateWindows.get(key) ?? { hits: [] }
-
-    state.hits = state.hits.filter((timestamp) => timestamp > windowStart)
-    if (state.hits.length >= SUBMISSION_SECURITY_POLICY.maxSubmissionsPerWindow) {
-        submissionRateWindows.set(key, state)
-        const retryAt = state.hits[0]! + SUBMISSION_SECURITY_POLICY.rateLimitWindowMs
-        return {
-            allowed: false,
-            retryAfterSeconds: Math.max(1, Math.ceil((retryAt - now) / 1000)),
-        }
-    }
-
-    state.hits.push(now)
-    submissionRateWindows.set(key, state)
-    cleanupRateLimitWindows(windowStart)
-
-    return {
-        allowed: true,
-        retryAfterSeconds: 0,
-    }
+export async function consumeSubmissionRateLimitToken(
+    key: string,
+    now = Date.now(),
+): Promise<{ allowed: boolean, retryAfterSeconds: number }> {
+    return submissionRateLimitStore.consume(key, now)
 }
 
-export function resetSubmissionRateLimits(): void {
-    submissionRateWindows.clear()
+export async function resetSubmissionRateLimits(): Promise<void> {
+    await submissionRateLimitStore.reset?.()
+}
+
+export function setSubmissionRateLimitStoreForTests(store: SubmissionRateLimitStore | null): void {
+    submissionRateLimitStore = store ?? createSubmissionRateLimitStore()
 }
 
 export function sanitizeExecutionFailureMessage(message: string): string {
@@ -266,6 +295,14 @@ export function apiErrorHandler(error: unknown, req: Request, res: Response, nex
         return
     }
 
+    if (isSubmissionProcessingError(error)) {
+        res.status(error.statusCode).json({
+            error: error.message,
+            code: error.code,
+        })
+        return
+    }
+
     console.error('[HTTP] Unhandled error:', error)
     res.status(500).json({ error: 'Internal server error' })
 }
@@ -282,8 +319,8 @@ function ensureJsonRequest(req: Request): void {
 
 function buildSubmissionRateLimitKey(req: Request): string {
     const clientIp = extractClientIp(req)
-    const userId = typeof req.body?.userId === 'string' && req.body.userId.trim().length > 0
-        ? req.body.userId.trim()
+    const userId = typeof req.auth?.userId === 'string' && req.auth.userId.trim().length > 0
+        ? req.auth.userId.trim()
         : 'anonymous'
 
     return `${clientIp}:${userId}`
@@ -337,13 +374,13 @@ function readRequiredCode(value: unknown): string {
     return value
 }
 
-function cleanupRateLimitWindows(windowStart: number): void {
-    for (const [key, state] of submissionRateWindows.entries()) {
-        state.hits = state.hits.filter((timestamp) => timestamp > windowStart)
-        if (state.hits.length === 0) {
-            submissionRateWindows.delete(key)
-        }
+function matchesThreatPattern(pattern: RegExp, code: string): boolean {
+    if (!pattern.flags.includes('g')) {
+        return pattern.test(code)
     }
+
+    const safePattern = new RegExp(pattern.source, pattern.flags.replace(/g/g, ''))
+    return safePattern.test(code)
 }
 
 function isBodyTooLargeError(error: unknown): boolean {
@@ -361,4 +398,18 @@ function isMalformedJsonError(error: unknown): boolean {
     }
 
     return 'body' in error
+}
+
+function createSubmissionRateLimitStore(): SubmissionRateLimitStore {
+    if (process.env.NODE_ENV === 'test') {
+        return new InMemorySubmissionRateLimitStore(
+            SUBMISSION_SECURITY_POLICY.rateLimitWindowMs,
+            SUBMISSION_SECURITY_POLICY.maxSubmissionsPerWindow,
+        )
+    }
+
+    return new RedisSubmissionRateLimitStore(
+        SUBMISSION_SECURITY_POLICY.rateLimitWindowMs,
+        SUBMISSION_SECURITY_POLICY.maxSubmissionsPerWindow,
+    )
 }

@@ -4,6 +4,7 @@ import * as submissionService from './submission.service.js'
 import * as submissionRepo from './submission.repo.js'
 import { getErrorMessage } from '../../shared/utils.js'
 import { submissionSecurityMiddleware } from './submission.security.js'
+import { requireAuth } from '../auth/auth.middleware.js'
 
 const router: Router = Router()
 
@@ -13,6 +14,8 @@ const router: Router = Router()
  *   post:
  *     summary: Nop bai giai (Submit Code)
  *     tags: [Submissions]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -20,14 +23,10 @@ const router: Router = Router()
  *           schema:
  *             type: object
  *             required:
- *               - userId
  *               - problemId
  *               - language
  *               - code
  *             properties:
- *               userId:
- *                 type: string
- *                 example: "user-123"
  *               problemId:
  *                 type: string
  *                 example: "prob-456"
@@ -47,10 +46,15 @@ const router: Router = Router()
  *               $ref: '#/components/schemas/SubmitResponse'
  *       400:
  *         description: Du lieu dau vao khong hop le.
+ *       401:
+ *         description: Chua dang nhap hoac token khong hop le.
  */
-router.post('/', submissionSecurityMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', requireAuth, submissionSecurityMiddleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await submissionService.submitCode(req.body)
+        const result = await submissionService.submitCode({
+            ...req.body,
+            userId: req.auth!.userId,
+        })
         res.json(result)
     } catch (error) {
         next(error)
@@ -63,6 +67,8 @@ router.post('/', submissionSecurityMiddleware, async (req: Request, res: Respons
  *   get:
  *     summary: Lay ket qua cham diem theo ID
  *     tags: [Submissions]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -72,13 +78,15 @@ router.post('/', submissionSecurityMiddleware, async (req: Request, res: Respons
  *     responses:
  *       200:
  *         description: Thong tin chi tiet ve submission va ket qua cham.
+ *       401:
+ *         description: Chua dang nhap hoac token khong hop le.
  *       404:
  *         description: Khong tim thay submission.
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string
-        const result = await submissionRepo.getSubmissionById(id)
+        const result = await submissionRepo.getSubmissionByIdForUser(id, req.auth!.userId)
         if (!result) {
             res.status(404).json({ error: 'Submission not found' })
             return

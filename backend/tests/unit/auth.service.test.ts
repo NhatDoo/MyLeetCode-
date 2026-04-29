@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../src/modules/auth/auth.repo.js', () => ({
     findUserByEmail: vi.fn(),
+    findUserById: vi.fn(),
     createUser: vi.fn(),
     createSession: vi.fn(),
     findActiveSessionByTokenHash: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../../src/shared/security.js', () => ({
 
 import * as authRepo from '../../src/modules/auth/auth.repo.js'
 import {
+    refresh,
     getCurrentUser,
     login,
     logout,
@@ -151,7 +153,7 @@ describe('auth.service', () => {
                 userId: 'user-1',
                 email: 'user@example.com',
             } as any)
-            vi.mocked(authRepo.findUserByEmail).mockResolvedValue({
+            vi.mocked(authRepo.findUserById).mockResolvedValue({
                 id: 'user-1',
                 email: 'user@example.com',
                 createdAt: new Date('2026-04-27T00:00:00.000Z'),
@@ -161,7 +163,31 @@ describe('auth.service', () => {
             const result = await getCurrentUser('plain-access-token')
 
             expect(verifyAccessToken).toHaveBeenCalledWith('plain-access-token')
+            expect(authRepo.findUserById).toHaveBeenCalledWith('user-1')
             expect(result?.user.email).toBe('user@example.com')
+        })
+    })
+
+    describe('refresh()', () => {
+        it('reuses the same hashed token for lookup and deletion', async () => {
+            vi.mocked(generateRefreshToken).mockReturnValue('rotated-refresh-token')
+            vi.mocked(hashToken).mockImplementation((token) => `${token}-hash`)
+            vi.mocked(authRepo.findActiveSessionByTokenHash).mockResolvedValue({
+                user: {
+                    id: 'user-1',
+                    email: 'user@example.com',
+                    createdAt: new Date('2026-04-27T00:00:00.000Z'),
+                    updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+                },
+            } as any)
+            vi.mocked(authRepo.deleteSessionByTokenHash).mockResolvedValue({ count: 1 } as any)
+
+            await refresh('plain-refresh-token', sessionMetadata)
+
+            const hashTokenCalls = vi.mocked(hashToken as any).mock.calls as Array<[string]>
+            expect(hashTokenCalls.filter(([token]) => token === 'plain-refresh-token')).toHaveLength(1)
+            expect(authRepo.findActiveSessionByTokenHash).toHaveBeenCalledWith('plain-refresh-token-hash')
+            expect(authRepo.deleteSessionByTokenHash).toHaveBeenCalledWith('plain-refresh-token-hash')
         })
     })
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/modules/submission/submission.repo.js', () => ({
     createSubmission: vi.fn(),
+    markSubmissionFailed: vi.fn(),
 }))
 
 vi.mock('../../src/shared/queue.js', () => ({
@@ -10,7 +11,7 @@ vi.mock('../../src/shared/queue.js', () => ({
 }))
 
 import { submitCode } from '../../src/modules/submission/submission.service.js'
-import { createSubmission } from '../../src/modules/submission/submission.repo.js'
+import { createSubmission, markSubmissionFailed } from '../../src/modules/submission/submission.repo.js'
 import { publishJob } from '../../src/shared/queue.js'
 
 const validRequest = {
@@ -33,7 +34,8 @@ describe('submitCode()', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         vi.mocked(createSubmission).mockResolvedValue(mockSubmission as any)
-        vi.mocked(publishJob).mockReturnValue(true)
+        vi.mocked(markSubmissionFailed).mockResolvedValue(undefined as any)
+        vi.mocked(publishJob).mockResolvedValue(true)
     })
 
     describe('Happy path', () => {
@@ -77,7 +79,7 @@ describe('submitCode()', () => {
                 callOrder.push('createSubmission')
                 return mockSubmission as any
             })
-            vi.mocked(publishJob).mockImplementation(() => {
+            vi.mocked(publishJob).mockImplementation(async () => {
                 callOrder.push('publishJob')
                 return true
             })
@@ -87,10 +89,14 @@ describe('submitCode()', () => {
             expect(callOrder).toEqual(['createSubmission', 'publishJob'])
         })
 
-        it('still succeeds when the queue buffer is full', async () => {
-            vi.mocked(publishJob).mockReturnValue(false)
+        it('marks the submission failed and surfaces a 503-style error when queue publish fails', async () => {
+            vi.mocked(publishJob).mockResolvedValue(false)
 
-            await expect(submitCode(validRequest)).resolves.toBeDefined()
+            await expect(submitCode(validRequest)).rejects.toThrow('Submission queue is temporarily unavailable')
+            expect(markSubmissionFailed).toHaveBeenCalledWith(
+                'sub-789',
+                'Submission queue is temporarily unavailable. Please retry your submission.',
+            )
         })
     })
 

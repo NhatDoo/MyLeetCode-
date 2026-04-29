@@ -195,7 +195,7 @@ function extractIpAddress(req: Request): string | null {
 function setRefreshCookie(res: Response, refreshToken: string, expiresAt: Date): void {
     res.cookie(authService.REFRESH_COOKIE_NAME, refreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'strict',
         secure: process.env.NODE_ENV === 'production',
         expires: expiresAt,
         path: '/',
@@ -205,7 +205,7 @@ function setRefreshCookie(res: Response, refreshToken: string, expiresAt: Date):
 function clearRefreshCookie(res: Response): void {
     res.clearCookie(authService.REFRESH_COOKIE_NAME, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'strict',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
     })
@@ -239,5 +239,4 @@ function parseCookieHeader(cookieHeader: string | undefined): Record<string, str
         return cookies
     }, {})
 }
-
 

@@ -1,6 +1,6 @@
-import { createSubmission } from './submission.repo.js'
+import { createSubmission, markSubmissionFailed } from './submission.repo.js'
 import { publishJob, QUEUES, type SubmissionJobPayload } from '../../shared/queue.js'
-import { validateSubmissionPayload } from './submission.security.js'
+import { SubmissionProcessingError, validateSubmissionPayload } from './submission.security.js'
 
 export interface SubmitCodeRequest {
     userId: string
@@ -33,10 +33,19 @@ export async function submitCode(req: SubmitCodeRequest): Promise<SubmitCodeResp
         code: safeRequest.code,
     }
 
-    const published = publishJob(QUEUES.SUBMISSION, payload)
+    const published = await publishJob(QUEUES.SUBMISSION, payload)
 
     if (!published) {
         console.warn(`[SubmissionService] Queue buffer full for submissionId=${submission.id}`)
+        await markSubmissionFailed(
+            submission.id,
+            'Submission queue is temporarily unavailable. Please retry your submission.',
+        )
+        throw new SubmissionProcessingError(
+            'Submission queue is temporarily unavailable. Please retry.',
+            503,
+            'SUBMISSION_QUEUE_UNAVAILABLE',
+        )
     }
 
     console.log(`[SubmissionService] Submitted submissionId=${submission.id} lang=${safeRequest.language}`)

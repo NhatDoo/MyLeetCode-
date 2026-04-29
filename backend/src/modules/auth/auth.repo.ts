@@ -20,6 +20,13 @@ export function findUserByEmail(email: string) {
     })
 }
 
+export function findUserById(id: string) {
+    return prisma.user.findUnique({
+        where: { id },
+        select: publicUserSelect,
+    })
+}
+
 export function createUser(input: { email: string, password: string }) {
     return prisma.user.create({
         data: {

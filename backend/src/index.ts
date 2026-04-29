@@ -4,7 +4,9 @@ import swaggerUi from 'swagger-ui-express'
 import swaggerJsdoc from 'swagger-jsdoc'
 
 import { connectDB, disconnectDB } from './shared/db.js'
+import { ensureImageBucketExists } from './shared/object-storage.js'
 import { connectQueue, disconnectQueue } from './shared/queue.js'
+import { connectRedis, disconnectRedis } from './shared/redis.js'
 import { startSubmissionWorker } from './modules/submission/submission.worker.js'
 
 import submissionRouter from './modules/submission/submission.controller.js'
@@ -83,7 +85,9 @@ const PORT = process.env.PORT || 3000
 async function bootstrap() {
     try {
         await connectDB()
+        await connectRedis()
         await connectQueue()
+        await ensureImageBucketExists()
         await startSubmissionWorker()
 
         app.listen(PORT, () => {
@@ -97,12 +101,24 @@ async function bootstrap() {
 
 bootstrap()
 
+let shutdownPromise: Promise<void> | null = null
+
 async function handleShutdown(signal: string) {
+    if (shutdownPromise) {
+        await shutdownPromise
+        return
+    }
+
     console.log(`\n[Server] Received ${signal}. Shutting down...`)
-    await disconnectQueue()
-    await disconnectDB()
-    process.exit(0)
+    shutdownPromise = (async () => {
+        await disconnectQueue()
+        await disconnectRedis()
+        await disconnectDB()
+        process.exit(0)
+    })()
+
+    await shutdownPromise
 }
 
-process.on('SIGINT', () => handleShutdown('SIGINT'))
-process.on('SIGTERM', () => handleShutdown('SIGTERM'))
+process.on('SIGINT', () => void handleShutdown('SIGINT'))
+process.on('SIGTERM', () => void handleShutdown('SIGTERM'))

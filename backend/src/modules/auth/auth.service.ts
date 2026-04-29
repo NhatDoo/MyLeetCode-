@@ -89,13 +89,14 @@ export async function refresh(refreshToken: string | undefined, metadata: Sessio
         throw new Error('Refresh token is required')
     }
 
-    const session = await authRepo.findActiveSessionByTokenHash(hashToken(refreshToken))
+    const tokenHash = hashToken(refreshToken)
+    const session = await authRepo.findActiveSessionByTokenHash(tokenHash)
     if (!session) {
         throw new Error('Invalid or expired refresh token')
     }
 
     // Delete old session for token rotation
-    await authRepo.deleteSessionByTokenHash(hashToken(refreshToken))
+    await authRepo.deleteSessionByTokenHash(tokenHash)
 
     return createSessionResult(session.user, metadata)
 }
@@ -110,7 +111,7 @@ export async function getCurrentUser(accessToken: string | undefined): Promise<C
         return null
     }
 
-    const user = await authRepo.findUserByEmail(payload.email)
+    const user = await authRepo.findUserById(payload.userId)
     if (!user) {
         return null
     }

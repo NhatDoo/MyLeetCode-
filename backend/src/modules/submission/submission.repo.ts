@@ -74,7 +74,7 @@ export async function saveSubmissionResult(
                     testcaseId: d.testCaseId,
                     status: d.passed ? 'PASSED' : judgeResult.status,
                     runtime: d.runtimeMs,
-                    memory: 0,   // TODO: đo memory usage thực tế từ docker stats
+                    memory: null,
                 })),
             })
         }
@@ -88,7 +88,7 @@ export async function markSubmissionFailed(submissionId: string, errorMessage: s
     return prisma.submission.update({
         where: { id: submissionId },
         data: {
-            status: SubmissionStatus.RUNTIME_ERROR,
+            status: SubmissionStatus.SYSTEM_ERROR,
             result: { error: errorMessage },
         },
     })
@@ -100,6 +100,24 @@ export async function markSubmissionFailed(submissionId: string, errorMessage: s
 export async function getSubmissionById(submissionId: string) {
     return prisma.submission.findUnique({
         where: { id: submissionId },
+        select: {
+            id: true,
+            status: true,
+            score: true,
+            result: true,
+            language: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    })
+}
+
+export async function getSubmissionByIdForUser(submissionId: string, userId: string) {
+    return prisma.submission.findFirst({
+        where: {
+            id: submissionId,
+            userId,
+        },
         select: {
             id: true,
             status: true,

@@ -5,12 +5,18 @@ import {
     consumeSubmissionRateLimitToken,
     detectSubmissionThreat,
     resetSubmissionRateLimits,
+    setSubmissionRateLimitStoreForTests,
     validateSubmissionPayload,
 } from '../../src/modules/submission/submission.security.js'
+import { InMemorySubmissionRateLimitStore } from '../../src/modules/submission/submission.rate-limit.js'
 
 describe('submission.security', () => {
-    beforeEach(() => {
-        resetSubmissionRateLimits()
+    beforeEach(async () => {
+        setSubmissionRateLimitStoreForTests(new InMemorySubmissionRateLimitStore(
+            SUBMISSION_SECURITY_POLICY.rateLimitWindowMs,
+            SUBMISSION_SECURITY_POLICY.maxSubmissionsPerWindow,
+        ))
+        await resetSubmissionRateLimits()
     })
 
     describe('validateSubmissionPayload()', () => {
@@ -64,23 +70,24 @@ describe('submission.security', () => {
     })
 
     describe('consumeSubmissionRateLimitToken()', () => {
-        it('allows requests up to the configured limit', () => {
+        it('allows requests up to the configured limit', async () => {
             const key = '127.0.0.1:user-1'
 
             for (let attempt = 0; attempt < SUBMISSION_SECURITY_POLICY.maxSubmissionsPerWindow; attempt += 1) {
-                expect(consumeSubmissionRateLimitToken(key, attempt * 1000).allowed).toBe(true)
+                await expect(consumeSubmissionRateLimitToken(key, attempt * 1000))
+                    .resolves.toMatchObject({ allowed: true })
             }
         })
 
-        it('blocks the first request over the limit', () => {
+        it('blocks the first request over the limit', async () => {
             const key = '127.0.0.1:user-1'
             const now = 10_000
 
             for (let attempt = 0; attempt < SUBMISSION_SECURITY_POLICY.maxSubmissionsPerWindow; attempt += 1) {
-                consumeSubmissionRateLimitToken(key, now + attempt)
+                await consumeSubmissionRateLimitToken(key, now + attempt)
             }
 
-            const decision = consumeSubmissionRateLimitToken(key, now + 99)
+            const decision = await consumeSubmissionRateLimitToken(key, now + 99)
 
             expect(decision.allowed).toBe(false)
             expect(decision.retryAfterSeconds).toBeGreaterThan(0)
