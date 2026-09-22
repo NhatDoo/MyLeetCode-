@@ -157,8 +157,14 @@ Repo hiện có `docker-compose.yml` trong thư mục `backend` để dựng:
 ```bash
 cd backend
 pnpm install
+docker build -t leetcode-runner-node:latest docker/node
+docker build -t leetcode-runner-python:latest docker/python
+docker build -t leetcode-runner-cpp:latest docker/cpp
 pnpm dev
 ```
+
+Ba runner Docker là bắt buộc để worker chấm được JavaScript, Python và C++.
+Nếu thiếu các image `leetcode-runner-*`, submission sẽ bị chuyển sang `SYSTEM_ERROR`.
 
 Nếu cần chạy test:
 

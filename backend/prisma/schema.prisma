@@ -16,6 +16,7 @@ model User {
   updatedAt   DateTime @updatedAt
 
   submissions Submission[]
+  solutions   CommunitySolution[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
 }
@@ -61,9 +62,30 @@ model Problem {
   image       String?
   tags        String[] @default([])
   topics      String[] @default([])
+  starterCode Json?
 
   testcases   TestCase[]
   submissions Submission[]
+  solutions   CommunitySolution[]
+}
+
+model CommunitySolution {
+  id          String   @id @default(uuid())
+  title       String
+  explanation String
+  code        String
+  language    String
+  upvotes     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId      String
+  problemId   String
+  user        User     @relation(fields: [userId], references: [id])
+  problem     Problem  @relation(fields: [problemId], references: [id])
+
+  @@index([problemId, createdAt])
+  @@index([userId])
 }
 
 model TestCase {
