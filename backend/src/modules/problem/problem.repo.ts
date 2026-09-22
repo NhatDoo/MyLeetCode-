@@ -1,5 +1,6 @@
 import { prisma } from '../../shared/db.js'
 import type { Prisma } from '../../generated/prisma/client.js'
+import { SubmissionStatus } from '../../generated/prisma/client.js'
 import type { CreateProblemInput, UpdateProblemInput } from './problem.schema.js'
 
 export async function getProblemById(id: string) {
@@ -22,6 +23,7 @@ export async function getAllProblems() {
             image: true,
             tags: true,
             topics: true,
+            starterCode: true,
         }
     })
 }
@@ -58,6 +60,10 @@ export async function createProblem(data: CreateProblemInput) {
         createData.topics = data.topics
     }
 
+    if (data.starterCode !== undefined) {
+        createData.starterCode = data.starterCode as Prisma.InputJsonValue
+    }
+
     return prisma.problem.create({
         data: createData,
         include: { testcases: true }
@@ -90,6 +96,10 @@ export async function updateProblem(id: string, data: UpdateProblemInput) {
 
         if (data.topics !== undefined) {
             updateData.topics = data.topics
+        }
+
+        if (data.starterCode !== undefined) {
+            updateData.starterCode = data.starterCode as Prisma.InputJsonValue
         }
 
         // If testcases are provided, delete dependent logs before replacing them.
@@ -128,4 +138,32 @@ export async function deleteProblem(id: string) {
             where: { id }
         })
     })
+}
+
+export async function getAcceptanceRates(problemIds: string[]): Promise<Map<string, number>> {
+    if (problemIds.length === 0) {
+        return new Map()
+    }
+
+    const grouped = await prisma.submission.groupBy({
+        by: ['problemId', 'status'],
+        where: {
+            problemId: { in: problemIds },
+            status: { notIn: [SubmissionStatus.PENDING, SubmissionStatus.RUNNING] },
+        },
+        _count: { _all: true },
+    })
+    const totals = new Map<string, { accepted: number; total: number }>()
+
+    for (const row of grouped) {
+        const current = totals.get(row.problemId) ?? { accepted: 0, total: 0 }
+        current.total += row._count._all
+        if (row.status === SubmissionStatus.ACCEPTED) current.accepted += row._count._all
+        totals.set(row.problemId, current)
+    }
+
+    return new Map([...totals].map(([problemId, stats]) => [
+        problemId,
+        stats.total === 0 ? 0 : Number(((stats.accepted / stats.total) * 100).toFixed(1)),
+    ]))
 }

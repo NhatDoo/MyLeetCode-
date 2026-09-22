@@ -8,6 +8,8 @@ type ProblemSummaryResponse = {
   image: string | null
   tags: string[]
   topics: string[]
+  acceptanceRate: number | null
+  starterCode: Record<string, string> | null
 }
 
 type ProblemDetailResponse = ProblemSummaryResponse & {
@@ -22,7 +24,9 @@ function normalizeProblem(problem: ProblemSummaryResponse | ProblemDetailRespons
     id: problem.id,
     title: problem.title,
     difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1) as Problem['difficulty'],
+    acceptance: problem.acceptanceRate,
     tags: problem.tags.length > 0 ? problem.tags : problem.topics,
+    starterCode: problem.starterCode ?? {},
     description: detail?.description ?? 'Open this problem to see its full description.',
     examples: detail?.testcases?.filter((testcase) => !testcase.isHidden).map((testcase) => ({ input: testcase.input, output: testcase.expected })) ?? [],
   }

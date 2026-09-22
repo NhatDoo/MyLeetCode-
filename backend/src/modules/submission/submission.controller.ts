@@ -61,6 +61,15 @@ router.post('/', requireAuth, submissionSecurityMiddleware, async (req: Request,
     }
 })
 
+router.get('/', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const problemId = typeof req.query.problemId === 'string' ? req.query.problemId.trim() : undefined
+        res.json(await submissionRepo.listSubmissionsForUser(req.auth!.userId, problemId))
+    } catch (err: unknown) {
+        res.status(500).json({ error: getErrorMessage(err) })
+    }
+})
+
 /**
  * @openapi
  * /api/submissions/{id}:

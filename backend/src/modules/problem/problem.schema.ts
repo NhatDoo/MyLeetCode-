@@ -10,6 +10,8 @@ export type ProblemTestCaseInput = {
     image?: ProblemImage | null
 }
 
+export type ProblemStarterCode = Record<string, string>
+
 export type CreateProblemInput = {
     title: string
     description: string
@@ -17,6 +19,7 @@ export type CreateProblemInput = {
     image?: ProblemImage | null
     tags?: string[]
     topics?: string[]
+    starterCode?: ProblemStarterCode | null
     testcases: ProblemTestCaseInput[]
 }
 
@@ -27,5 +30,6 @@ export type UpdateProblemInput = {
     image?: ProblemImage | null
     tags?: string[]
     topics?: string[]
+    starterCode?: ProblemStarterCode | null
     testcases?: ProblemTestCaseInput[]
 }

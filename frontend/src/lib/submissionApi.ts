@@ -10,6 +10,7 @@ export type Submission = {
   language: string
   createdAt: string
   updatedAt: string
+  problem?: { id: string; title: string }
 }
 
 export async function submitCode(accessToken: string, problemId: string, language: string, code: string) {
@@ -21,4 +22,9 @@ export async function submitCode(accessToken: string, problemId: string, languag
 
 export async function getSubmission(accessToken: string, submissionId: string) {
   return apiRequest<Submission>(`/api/submissions/${submissionId}`, {}, accessToken)
+}
+
+export async function listSubmissions(accessToken: string, problemId?: string) {
+  const query = problemId ? `?problemId=${encodeURIComponent(problemId)}` : ''
+  return apiRequest<Submission[]>(`/api/submissions${query}`, {}, accessToken)
 }

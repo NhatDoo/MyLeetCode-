@@ -7,7 +7,7 @@ export async function getProblemDetail(id: string) {
     if (!problem) {
         throw new Error('Problem not found')
     }
-    return problem
+    return addAcceptanceRate(problem)
 }
 
 export async function getProblemForManagement(id: string) {
@@ -19,7 +19,12 @@ export async function getProblemForManagement(id: string) {
 }
 
 export async function getAllProblems() {
-    return problemRepo.getAllProblems()
+    const problems = await problemRepo.getAllProblems()
+    const acceptanceRates = await problemRepo.getAcceptanceRates(problems.map((problem) => problem.id))
+    return problems.map((problem) => ({
+        ...problem,
+        acceptanceRate: acceptanceRates.get(problem.id) ?? 0,
+    }))
 }
 
 
@@ -55,4 +60,9 @@ function mapProblemWriteError(error: unknown): Error {
     }
 
     return error instanceof Error ? error : new Error('Unexpected problem write error')
+}
+
+async function addAcceptanceRate<T extends { id: string }>(problem: T) {
+    const acceptanceRates = await problemRepo.getAcceptanceRates([problem.id])
+    return { ...problem, acceptanceRate: acceptanceRates.get(problem.id) ?? 0 }
 }

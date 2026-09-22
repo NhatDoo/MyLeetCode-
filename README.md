@@ -173,6 +173,13 @@ cd backend
 pnpm test
 ```
 
+### Problem metadata và community solutions
+
+- `GET /api/problems` trả danh sách problem kèm `acceptanceRate` tính từ các submission đã hoàn tất và `starterCode` theo ngôn ngữ.
+- `GET /api/problems/:problemId` trả mô tả, starter code và chỉ các public testcase.
+- `GET /api/problems/:problemId/solutions` trả community solutions công khai.
+- `POST /api/problems/:problemId/solutions` tạo solution mới, yêu cầu access token và nhận `title`, `explanation`, `code`, `language`.
+
 ## Tài liệu thiết kế
 
 Nếu muốn xem sâu hơn về actor, sequence, decision, trade-off và security design, đọc thêm file [DESIGN.md](./DESIGN.md).

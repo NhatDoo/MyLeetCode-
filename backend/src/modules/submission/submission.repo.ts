@@ -126,6 +126,27 @@ export async function getSubmissionByIdForUser(submissionId: string, userId: str
             language: true,
             createdAt: true,
             updatedAt: true,
+            problem: { select: { id: true, title: true } },
+        },
+    })
+}
+
+export async function listSubmissionsForUser(userId: string, problemId?: string) {
+    return prisma.submission.findMany({
+        where: {
+            userId,
+            ...(problemId ? { problemId } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+            id: true,
+            status: true,
+            score: true,
+            language: true,
+            createdAt: true,
+            updatedAt: true,
+            problem: { select: { id: true, title: true } },
         },
     })
 }

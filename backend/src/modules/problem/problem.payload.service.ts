@@ -36,6 +36,11 @@ export function buildCreateProblemInput(req: Request): CreateProblemInput {
         payload.topics = topics
     }
 
+    const starterCode = readOptionalStarterCode(body.starterCode, 'starterCode')
+    if (starterCode !== undefined) {
+        payload.starterCode = starterCode
+    }
+
     return payload
 }
 
@@ -70,6 +75,10 @@ export function buildUpdateProblemInput(req: Request): UpdateProblemInput {
         payload.topics = topics ?? []
     }
 
+    if (hasOwn(body, 'starterCode')) {
+        payload.starterCode = readOptionalStarterCode(body.starterCode, 'starterCode') ?? null
+    }
+
     const testcases = readUpdateTestcases(body, req)
     if (testcases !== undefined) {
         payload.testcases = testcases
@@ -86,11 +95,31 @@ export function ensureUpdatePayloadHasChanges(payload: UpdateProblemInput): void
         payload.image !== undefined ||
         payload.tags !== undefined ||
         payload.topics !== undefined ||
+        payload.starterCode !== undefined ||
         payload.testcases !== undefined
 
     if (!hasChanges) {
         throw new ProblemRequestError('No update fields were provided')
     }
+}
+
+function readOptionalStarterCode(value: unknown, fieldName: string): Record<string, string> | undefined {
+    if (value === undefined || value === null || value === '') {
+        return undefined
+    }
+
+    const parsed = typeof value === 'string' ? safeJsonParse(value, `${fieldName} must be valid JSON`) : value
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new ProblemRequestError(`${fieldName} must be an object keyed by language`)
+    }
+
+    return Object.entries(parsed as Record<string, unknown>).reduce<Record<string, string>>((result, [language, code]) => {
+        if (typeof code !== 'string') {
+            throw new ProblemRequestError(`${fieldName}.${language} must be a string`)
+        }
+        result[language] = code
+        return result
+    }, {})
 }
 
 function readCreateTestcases(body: Record<string, unknown>, req: Request): ProblemTestCaseInput[] {
