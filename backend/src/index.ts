@@ -13,6 +13,7 @@ import submissionRouter from './modules/submission/submission.controller.js'
 import problemRouter from './modules/problem/problem.controller.js'
 import authRouter from './modules/auth/auth.controller.js'
 import solutionRouter from './modules/solution/solution.controller.js'
+import discussionRouter from './modules/discussion/discussion.controller.js'
 import {
     apiErrorHandler,
     applySecurityHeaders,
@@ -74,6 +75,7 @@ app.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/api/submissions', submissionRouter)
 app.use('/api/problems', problemRouter)
 app.use('/api/auth', authRouter)
+app.use('/api', discussionRouter)
 app.use('/api', solutionRouter)
 
 app.get('/health', (req, res) => {

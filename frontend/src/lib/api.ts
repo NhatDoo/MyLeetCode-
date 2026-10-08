@@ -2,7 +2,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
   const headers = new Headers(options.headers)
-  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  if (options.body instanceof FormData) {
+    headers.delete('Content-Type')
+  } else if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
 
   const response = await fetch(`${API_BASE_URL}${path}`, {

@@ -17,6 +17,7 @@ model User {
 
   submissions Submission[]
   solutions   CommunitySolution[]
+  discussions  ProblemDiscussion[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
 }
@@ -67,6 +68,7 @@ model Problem {
   testcases   TestCase[]
   submissions Submission[]
   solutions   CommunitySolution[]
+  discussions  ProblemDiscussion[]
 }
 
 model CommunitySolution {
@@ -83,6 +85,22 @@ model CommunitySolution {
   problemId String
   user      User    @relation(fields: [userId], references: [id])
   problem   Problem @relation(fields: [problemId], references: [id])
+
+  @@index([problemId, createdAt])
+  @@index([userId])
+}
+
+model ProblemDiscussion {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  problemId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@index([problemId, createdAt])
   @@index([userId])

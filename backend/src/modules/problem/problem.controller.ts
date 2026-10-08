@@ -2,11 +2,16 @@ import { Router } from 'express'
 import type { Request, Response } from 'express'
 import * as problemRequestService from './problem.request.service.js'
 import * as problemService from './problem.service.js'
-import { requireAuth } from '../auth/auth.middleware.js'
+import { requireAdmin, requireAuth } from '../auth/auth.middleware.js'
 import { assertUuid } from './problem.request.errors.js'
 import { getErrorMessage } from '../../shared/utils.js'
+import { enrichProblemResponseWithImageUrls } from './problem.response.service.js'
 
 const router: Router = Router()
+
+router.get('/admin/access', requireAuth, requireAdmin, (_req: Request, res: Response) => {
+    res.json({ allowed: true })
+})
 
 /**
  * @openapi
@@ -74,7 +79,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     try {
         const id = assertUuid(req.params.id, 'problemId')
         const problem = await problemService.getProblemDetail(id)
-        res.json(problem)
+        res.json(enrichProblemResponseWithImageUrls(problem))
     } catch (err: unknown) {
         res.status(problemRequestService.resolveProblemRequestErrorStatusCode(err)).json({ error: getErrorMessage(err) })
     }
@@ -134,7 +139,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  *       201:
  *         description: Tra ve thong tin bai toan da tao.
  */
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
         const problem = await problemRequestService.createProblemFromRequest(req, res)
         res.status(201).json(problem)
@@ -199,7 +204,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
  *       200:
  *         description: Tra ve thong tin bai toan sau cap nhat.
  */
-router.put('/:id', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
         const id = assertUuid(req.params.id, 'problemId')
         const problem = await problemRequestService.updateProblemFromRequest(id, req, res)
@@ -227,7 +232,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
  *       200:
  *         description: Tra ve trang thai xoa.
  */
-router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
         const id = assertUuid(req.params.id, 'problemId')
         await problemRequestService.deleteProblemWithAssets(id)

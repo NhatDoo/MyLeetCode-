@@ -14,6 +14,7 @@ type ProblemSummaryResponse = {
 
 type ProblemDetailResponse = ProblemSummaryResponse & {
   description: string
+  imageUrl?: string | null
   testcases: { id: string; input: string; expected: string; isHidden: boolean }[]
 }
 
@@ -28,6 +29,7 @@ function normalizeProblem(problem: ProblemSummaryResponse | ProblemDetailRespons
     tags: problem.tags.length > 0 ? problem.tags : problem.topics,
     starterCode: problem.starterCode ?? {},
     description: detail?.description ?? 'Open this problem to see its full description.',
+    imageUrl: detail?.imageUrl ?? null,
     examples: detail?.testcases?.filter((testcase) => !testcase.isHidden).map((testcase) => ({ input: testcase.input, output: testcase.expected })) ?? [],
   }
 }

@@ -1,38 +1,30 @@
 import { Router, type Request, type Response } from 'express'
-import { assertUuid } from '../problem/problem.request.errors.js'
 import { getErrorMessage } from '../../shared/utils.js'
 import { requireAuth } from '../auth/auth.middleware.js'
-import * as submissionRepo from '../submission/submission.repo.js'
-import * as solutionService from './solution.service.js'
+import { assertUuid } from '../problem/problem.request.errors.js'
+import * as discussionService from './discussion.service.js'
 
 const router: Router = Router()
 
-router.get('/problems/:problemId/solutions', requireAuth, async (req: Request, res: Response) => {
+router.get('/problems/:problemId/discussions', requireAuth, async (req: Request, res: Response) => {
     try {
         const problemId = assertUuid(req.params.problemId, 'problemId')
-        const hasAccepted = await submissionRepo.hasAcceptedSubmission(req.auth!.userId, problemId)
-        if (!hasAccepted) {
-            res.status(403).json({ error: 'Accepted submission required before viewing solutions' })
-            return
-        }
-        res.json(await solutionService.listSolutions(problemId))
+        res.json(await discussionService.listDiscussions(problemId))
     } catch (error: unknown) {
         res.status(resolveStatusCode(error)).json({ error: getErrorMessage(error) })
     }
 })
 
-router.post('/problems/:problemId/solutions', requireAuth, async (req: Request, res: Response) => {
+router.post('/problems/:problemId/discussions', requireAuth, async (req: Request, res: Response) => {
     try {
         const problemId = assertUuid(req.params.problemId, 'problemId')
-        const solution = await solutionService.createSolution({
+        const discussion = await discussionService.createDiscussion({
             problemId,
             userId: req.auth!.userId,
             title: req.body?.title,
-            explanation: req.body?.explanation,
-            code: req.body?.code,
-            language: req.body?.language,
+            content: req.body?.content,
         })
-        res.status(201).json(solution)
+        res.status(201).json(discussion)
     } catch (error: unknown) {
         res.status(resolveStatusCode(error)).json({ error: getErrorMessage(error) })
     }

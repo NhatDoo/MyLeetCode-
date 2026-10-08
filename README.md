@@ -177,8 +177,18 @@ pnpm test
 
 - `GET /api/problems` trả danh sách problem kèm `acceptanceRate` tính từ các submission đã hoàn tất và `starterCode` theo ngôn ngữ.
 - `GET /api/problems/:problemId` trả mô tả, starter code và chỉ các public testcase.
-- `GET /api/problems/:problemId/solutions` trả community solutions công khai.
+- `GET /api/problems/:problemId/solutions` yêu cầu đăng nhập và người xem phải có submission `ACCEPTED` cho bài đó.
 - `POST /api/problems/:problemId/solutions` tạo solution mới, yêu cầu access token và nhận `title`, `explanation`, `code`, `language`.
+- `GET /api/problems/:problemId/discussions` liệt kê chủ đề thảo luận của bài, yêu cầu đăng nhập.
+- `POST /api/problems/:problemId/discussions` tạo chủ đề thảo luận với `title` và `content`, yêu cầu access token.
+- Admin có thể gửi `problemImage` khi tạo/cập nhật bài; backend lưu file trong MinIO và trả `imageUrl` ở API chi tiết bài.
+
+### Admin tạo problem và nhập testcase
+
+- Đặt `ADMIN_EMAILS` trong `backend/.env` thành danh sách email admin, phân tách bằng dấu phẩy.
+- Chỉ các tài khoản trong danh sách này được tạo, cập nhật hoặc xóa problem.
+- Trang Admin hỗ trợ nhập testcase bằng `.xlsx`, `.xls` hoặc `.csv`; sheet đầu tiên cần có cột `input` và `expected`. Cột `isHidden` là tùy chọn và mặc định `true`.
+- Giới hạn upload mặc định là 5 MB, có thể điều chỉnh bằng `PROBLEM_IMAGE_MAX_FILE_BYTES`.
 
 ## Tài liệu thiết kế
 

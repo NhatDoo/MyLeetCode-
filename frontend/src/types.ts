@@ -8,6 +8,7 @@ export type Problem = {
   starterCode: Record<string, string>
   tags: string[]
   description: string
+  imageUrl?: string | null
   examples: { input: string; output: string }[]
 }
 
@@ -18,6 +19,15 @@ export type CommunitySolution = {
   code: string
   language: string
   upvotes: number
+  createdAt: string
+  updatedAt: string
+  user: { id: string; email: string }
+}
+
+export type CommunityDiscussion = {
+  id: string
+  title: string
+  content: string
   createdAt: string
   updatedAt: string
   user: { id: string; email: string }

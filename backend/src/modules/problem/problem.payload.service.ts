@@ -387,11 +387,11 @@ function parseTestcasesFromSpreadsheet(file: Express.Multer.File): ProblemTestCa
 
 function readSpreadsheetTestcase(row: Record<string, unknown>, index: number): ProblemTestCaseInput {
     const input = readRequiredString(
-        readSpreadsheetColumn(row, ['input', 'stdin', 'inputdata']),
+        normalizeSpreadsheetValue(readSpreadsheetColumn(row, ['input', 'stdin', 'inputdata'])),
         `testcases[${index}].input`,
     )
     const expected = readRequiredString(
-        readSpreadsheetColumn(row, ['expected', 'output', 'expectedoutput']),
+        normalizeSpreadsheetValue(readSpreadsheetColumn(row, ['expected', 'output', 'expectedoutput'])),
         `testcases[${index}].expected`,
     )
     const imageValue = readSpreadsheetColumn(row, ['image', 'imagekey'])
@@ -408,6 +408,18 @@ function readSpreadsheetTestcase(row: Record<string, unknown>, index: number): P
     }
 
     return testcase
+}
+
+function normalizeSpreadsheetValue(value: unknown): unknown {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return String(value)
+    }
+
+    if (typeof value === 'boolean') {
+        return String(value)
+    }
+
+    return value
 }
 
 function readSpreadsheetColumn(row: Record<string, unknown>, aliases: string[]): unknown {

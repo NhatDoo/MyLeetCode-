@@ -151,6 +151,18 @@ export async function listSubmissionsForUser(userId: string, problemId?: string)
     })
 }
 
+export async function hasAcceptedSubmission(userId: string, problemId: string): Promise<boolean> {
+    const submission = await prisma.submission.findFirst({
+        where: {
+            userId,
+            problemId,
+            status: SubmissionStatus.ACCEPTED,
+        },
+        select: { id: true },
+    })
+    return submission !== null
+}
+
 /**
  * Lấy test cases của một problem (bao gồm hidden).
  * Chỉ được gọi bởi worker — không expose ra API.
